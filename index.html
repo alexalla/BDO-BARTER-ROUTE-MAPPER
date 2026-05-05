@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BDO Map - Fixed Drag</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        #viewport {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+            cursor: grab;
+            user-select: none;
+        }
+        #map {
+            position: absolute;
+            transform-origin: 0 0;
+            left: 50%;
+            top: 50%;
+        }
+        img {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            image-rendering: pixelated;
+            loading: lazy;
+            
+            /* FIXES IMAGE DRAGGING */
+            draggable: false;
+            -webkit-user-drag: none;
+            user-drag: none;
+            pointer-events: none;        /* Important */
+        }
+    </style>
+</head>
+<body>
+
+<div id="viewport">
+    <div id="map"></div>
+</div>
+
+<script>
+const tileSize = 32;
+const map = document.getElementById("map");
+const viewport = document.getElementById("viewport");
+
+const min = -50;
+const max = 30;
+
+let scale = 1.5;
+let posX = -((max - min + 1) * tileSize) / 2;
+let posY = -((max - min + 1) * tileSize) / 2;
+
+function updateTransform() {
+    map.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+}
+
+// Create tiles with anti-drag protection
+for (let x = min; x <= max; x++) {
+    for (let y = min; y <= max; y++) {
+        const img = document.createElement("img");
+        img.src = `${x}_${y}.webp`;
+        img.style.left = (x * tileSize) + "px";
+        img.style.top = (y * tileSize) + "px";
+        
+        // Extra protection
+        img.draggable = false;
+        img.addEventListener('dragstart', e => e.preventDefault());
+        
+        map.appendChild(img);
+    }
+}
+
+updateTransform();
+
+// ==================== ZOOM ====================
+viewport.addEventListener("wheel", (e) => {
+    e.preventDefault();
+
+    const rect = viewport.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const worldX = (mouseX - posX) / scale;
+    const worldY = (mouseY - posY) / scale;
+
+    const delta = e.deltaY * -0.0012;
+    scale = Math.min(Math.max(0.3, scale + delta), 8);
+
+    posX = mouseX - worldX * scale;
+    posY = mouseY - worldY * scale;
+
+    updateTransform();
+});
+
+// ==================== HOLD TO DRAG ====================
+let isDragging = false;
+let lastX, lastY;
+
+viewport.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    isDragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    viewport.style.cursor = "grabbing";
+});
+
+window.addEventListener("mouseup", () => {
+    isDragging = false;
+    viewport.style.cursor = "grab";
+});
+
+window.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+
+    posX += e.clientX - lastX;
+    posY += e.clientY - lastY;
+
+    lastX = e.clientX;
+    lastY = e.clientY;
+
+    updateTransform();
+});
+
+viewport.addEventListener("mouseleave", () => {
+    isDragging = false;
+    viewport.style.cursor = "grab";
+});
+
+// Info
+const info = document.createElement("div");
+info.style.position = "absolute";
+info.style.top = "10px";
+info.style.left = "10px";
+info.style.color = "#fff";
+info.style.background = "rgba(0,0,0,0.7)";
+info.style.padding = "8px 12px";
+info.style.borderRadius = "4px";
+info.style.fontSize = "14px";
+info.textContent = `Zoom: ${Math.round(scale * 100)}% | Hold left click to drag`;
+document.body.appendChild(info);
+
+viewport.addEventListener("wheel", () => {
+    info.textContent = `Zoom: ${Math.round(scale * 100)}% | Hold left click to drag`;
+});
+</script>
+
+</body>
+</html>
