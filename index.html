@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>BDO Map - Dynamic Tiles</title>
+    <title>BDO Map - Fixed Center (0,0)</title>
     <style>
         body {
             margin: 0;
@@ -21,8 +21,8 @@
         #map {
             position: absolute;
             transform-origin: 0 0;
-            left: 50%;
-            top: 50%;
+            left: 0;
+            top: 0;
         }
         img {
             position: absolute;
@@ -41,17 +41,17 @@
 
 <script>
 const tileSize = 32;
-const map = document.getElementById("map");
-const viewport = document.getElementById("viewport");
-
 const min = -50;
 const max = 30;
 
-let scale = 1;
-let posX = -((max - min + 1) * tileSize) / 3;
-let posY = -((max - min + 1) * tileSize) / 3;
+const map = document.getElementById("map");
+const viewport = document.getElementById("viewport");
 
-const loadedTiles = new Map();   // Cache loaded images
+let scale = 1.0;
+let posX = 0;
+let posY = 0;
+
+const loadedTiles = new Map();
 
 function getTile(x, y) {
     const key = `${x},${y}`;
@@ -68,23 +68,61 @@ function getTile(x, y) {
     return img;
 }
 
-function updateVisibleTiles() {
-    const rect = viewport.getBoundingClientRect();
+// Center the map so that tile (0,0) is in the middle of the screen
+function centerOnZero() {
+    const vw = viewport.clientWidth;
+    const vh = viewport.clientHeight;
     
-    // Calculate visible range in world coordinates
-    const worldLeft   = -posX / scale;
-    const worldRight  = (rect.width - posX) / scale;
-    const worldTop    = -posY / scale;
-    const worldBottom = (rect.height - posY) / scale;
+    posX = vw / 2;
+    posY = vh / 2;
+}
 
-    const tileMinX = Math.floor(worldLeft / tileSize) - 1;
-    const tileMaxX = Math.ceil(worldRight / tileSize) + 1;
-    const tileMinY = Math.floor(worldTop / tileSize) - 1;
-    const tileMaxY = Math.ceil(worldBottom / tileSize) + 1;
+// Load tiles near center first
+function loadInitialTiles() {
+    const centerX = 0;
+    const centerY = 0;
+    
+    // Load center + nearby tiles first
+    for (let x = -8; x <= 8; x++) {
+        for (let y = -8; y <= 8; y++) {
+            if (x >= min && x <= max && y >= min && y <= max) {
+                getTile(x, y);
+            }
+        }
+    }
+    
+    // Then continue loading outward
+    setTimeout(() => {
+        for (let r = 9; r <= 40; r++) {
+            for (let dx = -r; dx <= r; dx++) {
+                for (let dy = -r; dy <= r; dy++) {
+                    if (Math.abs(dx) === r || Math.abs(dy) === r) {
+                        const x = centerX + dx;
+                        const y = centerY + dy;
+                        if (x >= min && x <= max && y >= min && y <= max) {
+                            getTile(x, y);
+                        }
+                    }
+                }
+            }
+        }
+    }, 300);
+}
+
+function updateVisibleTiles() {
+    const worldLeft   = -posX / scale - 150;
+    const worldRight  = (viewport.clientWidth - posX) / scale + 150;
+    const worldTop    = -posY / scale - 150;
+    const worldBottom = (viewport.clientHeight - posY) / scale + 150;
+
+    const tileMinX = Math.floor(worldLeft / tileSize);
+    const tileMaxX = Math.ceil(worldRight / tileSize);
+    const tileMinY = Math.floor(worldTop / tileSize);
+    const tileMaxY = Math.ceil(worldBottom / tileSize);
 
     for (let x = Math.max(min, tileMinX); x <= Math.min(max, tileMaxX); x++) {
         for (let y = Math.max(min, tileMinY); y <= Math.min(max, tileMaxY); y++) {
-            getTile(x, y);   // Load only if visible
+            getTile(x, y);
         }
     }
 }
@@ -94,12 +132,21 @@ function updateTransform() {
     updateVisibleTiles();
 }
 
-// Initial load
+// Initialize
+centerOnZero();
+loadInitialTiles();
 updateTransform();
 
-// ==================== ZOOM ====================
+// Handle window resize
+window.addEventListener('resize', () => {
+    centerOnZero();
+    updateTransform();
+});
+
+// ==================== ZOOM (on mouse cursor) ====================
 viewport.addEventListener("wheel", (e) => {
     e.preventDefault();
+    
     const rect = viewport.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
@@ -108,7 +155,7 @@ viewport.addEventListener("wheel", (e) => {
     const worldY = (mouseY - posY) / scale;
 
     const delta = e.deltaY * -0.0015;
-    scale = Math.min(Math.max(0.2, scale + delta), 10);
+    scale = Math.min(Math.max(0.3, scale + delta), 12);
 
     posX = mouseX - worldX * scale;
     posY = mouseY - worldY * scale;
@@ -129,9 +176,9 @@ viewport.addEventListener("mousedown", e => {
     }
 });
 
-window.addEventListener("mouseup", () => {
-    isDragging = false;
-    viewport.style.cursor = "grab";
+window.addEventListener("mouseup", () => { 
+    isDragging = false; 
+    viewport.style.cursor = "grab"; 
 });
 
 window.addEventListener("mousemove", e => {
@@ -145,8 +192,8 @@ window.addEventListener("mousemove", e => {
 
 // Info
 const info = document.createElement("div");
-info.style.cssText = `position:absolute;top:10px;left:10px;color:white;background:rgba(0,0,0,0.7);padding:8px 12px;border-radius:4px;`;
-info.textContent = "Hold click to drag • Scroll to zoom";
+info.style.cssText = `position:absolute;top:10px;left:10px;color:white;background:rgba(0,0,0,0.7);padding:8px 12px;border-radius:4px;font-size:14px;z-index:100;`;
+info.textContent = "Hold left click to drag • Scroll to zoom | (0,0) centered";
 document.body.appendChild(info);
 </script>
 
