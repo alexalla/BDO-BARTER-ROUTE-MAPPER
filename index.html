@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>BDO Map - Fixed Drag</title>
+    <title>BDO Map - Dynamic Tiles</title>
     <style>
         body {
             margin: 0;
@@ -29,13 +29,7 @@
             width: 32px;
             height: 32px;
             image-rendering: pixelated;
-            loading: lazy;
-            
-            /* FIXES IMAGE DRAGGING */
-            draggable: false;
-            -webkit-user-drag: none;
-            user-drag: none;
-            pointer-events: none;        /* Important */
+            pointer-events: none;
         }
     </style>
 </head>
@@ -53,36 +47,59 @@ const viewport = document.getElementById("viewport");
 const min = -50;
 const max = 30;
 
-let scale = 1.5;
-let posX = -((max - min + 1) * tileSize) / 2;
-let posY = -((max - min + 1) * tileSize) / 2;
+let scale = 1;
+let posX = -((max - min + 1) * tileSize) / 3;
+let posY = -((max - min + 1) * tileSize) / 3;
 
-function updateTransform() {
-    map.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+const loadedTiles = new Map();   // Cache loaded images
+
+function getTile(x, y) {
+    const key = `${x},${y}`;
+    if (loadedTiles.has(key)) return loadedTiles.get(key);
+
+    const img = document.createElement("img");
+    img.src = `tiles/${x}_${y}.webp`;
+    img.style.left = (x * tileSize) + "px";
+    img.style.top = (y * tileSize) + "px";
+    img.draggable = false;
+    
+    map.appendChild(img);
+    loadedTiles.set(key, img);
+    return img;
 }
 
-// Create tiles with anti-drag protection
-for (let x = min; x <= max; x++) {
-    for (let y = min; y <= max; y++) {
-        const img = document.createElement("img");
-        img.src = `tiles/${x}_${y}.webp`;
-        img.style.left = (x * tileSize) + "px";
-        img.style.top = (y * tileSize) + "px";
-        
-        // Extra protection
-        img.draggable = false;
-        img.addEventListener('dragstart', e => e.preventDefault());
-        
-        map.appendChild(img);
+function updateVisibleTiles() {
+    const rect = viewport.getBoundingClientRect();
+    
+    // Calculate visible range in world coordinates
+    const worldLeft   = -posX / scale;
+    const worldRight  = (rect.width - posX) / scale;
+    const worldTop    = -posY / scale;
+    const worldBottom = (rect.height - posY) / scale;
+
+    const tileMinX = Math.floor(worldLeft / tileSize) - 1;
+    const tileMaxX = Math.ceil(worldRight / tileSize) + 1;
+    const tileMinY = Math.floor(worldTop / tileSize) - 1;
+    const tileMaxY = Math.ceil(worldBottom / tileSize) + 1;
+
+    for (let x = Math.max(min, tileMinX); x <= Math.min(max, tileMaxX); x++) {
+        for (let y = Math.max(min, tileMinY); y <= Math.min(max, tileMaxY); y++) {
+            getTile(x, y);   // Load only if visible
+        }
     }
 }
 
+function updateTransform() {
+    map.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+    updateVisibleTiles();
+}
+
+// Initial load
 updateTransform();
 
 // ==================== ZOOM ====================
 viewport.addEventListener("wheel", (e) => {
     e.preventDefault();
-
     const rect = viewport.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
@@ -90,8 +107,8 @@ viewport.addEventListener("wheel", (e) => {
     const worldX = (mouseX - posX) / scale;
     const worldY = (mouseY - posY) / scale;
 
-    const delta = e.deltaY * -0.0012;
-    scale = Math.min(Math.max(0.3, scale + delta), 8);
+    const delta = e.deltaY * -0.0015;
+    scale = Math.min(Math.max(0.2, scale + delta), 10);
 
     posX = mouseX - worldX * scale;
     posY = mouseY - worldY * scale;
@@ -99,16 +116,17 @@ viewport.addEventListener("wheel", (e) => {
     updateTransform();
 });
 
-// ==================== HOLD TO DRAG ====================
+// ==================== DRAG ====================
 let isDragging = false;
 let lastX, lastY;
 
-viewport.addEventListener("mousedown", (e) => {
-    if (e.button !== 0) return;
-    isDragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    viewport.style.cursor = "grabbing";
+viewport.addEventListener("mousedown", e => {
+    if (e.button === 0) {
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        viewport.style.cursor = "grabbing";
+    }
 });
 
 window.addEventListener("mouseup", () => {
@@ -116,39 +134,20 @@ window.addEventListener("mouseup", () => {
     viewport.style.cursor = "grab";
 });
 
-window.addEventListener("mousemove", (e) => {
+window.addEventListener("mousemove", e => {
     if (!isDragging) return;
-
     posX += e.clientX - lastX;
     posY += e.clientY - lastY;
-
     lastX = e.clientX;
     lastY = e.clientY;
-
     updateTransform();
-});
-
-viewport.addEventListener("mouseleave", () => {
-    isDragging = false;
-    viewport.style.cursor = "grab";
 });
 
 // Info
 const info = document.createElement("div");
-info.style.position = "absolute";
-info.style.top = "10px";
-info.style.left = "10px";
-info.style.color = "#fff";
-info.style.background = "rgba(0,0,0,0.7)";
-info.style.padding = "8px 12px";
-info.style.borderRadius = "4px";
-info.style.fontSize = "14px";
-info.textContent = `Zoom: ${Math.round(scale * 100)}% | Hold left click to drag`;
+info.style.cssText = `position:absolute;top:10px;left:10px;color:white;background:rgba(0,0,0,0.7);padding:8px 12px;border-radius:4px;`;
+info.textContent = "Hold click to drag • Scroll to zoom";
 document.body.appendChild(info);
-
-viewport.addEventListener("wheel", () => {
-    info.textContent = `Zoom: ${Math.round(scale * 100)}% | Hold left click to drag`;
-});
 </script>
 
 </body>
