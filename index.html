@@ -65,7 +65,7 @@ function updateTransform() {
 for (let x = min; x <= max; x++) {
     for (let y = min; y <= max; y++) {
         const img = document.createElement("img");
-        img.src = `${x}_${y}.webp`;
+        img.src = `tiles/${x}_${y}.webp`;
         img.style.left = (x * tileSize) + "px";
         img.style.top = (y * tileSize) + "px";
         
