@@ -31,18 +31,26 @@ const tileSize = 16;
 const min = -50;
 const max = 30;
 
-let scale = 6.0;           // ← Much more zoomed in at start
+let scale = 6.0;
 let offsetX = 0;
 let offsetY = 0;
 
 const tiles = new Map();
 
-function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    offsetX = canvas.width / 2;
-    offsetY = canvas.height / 2;
-}
+// ==================== CITIES POI) ====================
+const pois = [
+    { x: 0,   y: 0,   name: "Test Center",      type: "node",     color: "#00ff00" },
+    { x: -10.7,  y: -1,   name: "Port Epheria",           type: "town",     color: "#4488ff" },
+    { x: 0.5,   y: -2.4, name: "Velia",            type: "town",     color: "#4488ff" },
+    { x: 4.5,  y: -8.8,  name: "Iliya Island",     type: "town",   color: "#4488ff" },
+// ==================== ISLANDS ====================
+
+	{ x: 7.7, y: -8.7, name: "Pujara Island", color: "#ff4444" },
+	{ x: 7.5, y: -5.8, name: "Pilava Island", color: "#ff4444" },
+	{ x: 6.1, y: -6, name: "Delinghart Island", color: "#ff4444" },
+    // Add more POIs here like this:
+    // { x: 12.5, y: -8.3, name: "Western Guard Camp", color: "#ff4444" },
+];
 
 function getTile(x, y) {
     const key = `${x},${y}`;
@@ -52,6 +60,13 @@ function getTile(x, y) {
     img.src = `tiles/${x}_${y}.webp`;
     tiles.set(key, img);
     return img;
+}
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    offsetX = canvas.width / 2;
+    offsetY = canvas.height / 2;
 }
 
 function draw() {
@@ -77,6 +92,35 @@ function draw() {
             }
         }
     }
+
+    // ==================== DRAW POIs ====================
+    ctx.textAlign = "center";
+    ctx.font = `${Math.max(13, scale * 1.6)}px Arial`;
+
+    pois.forEach(poi => {
+        const screenX = offsetX + poi.x * tileSize * scale;
+        const screenY = offsetY + poi.y * tileSize * scale;
+
+        if (screenX < -100 || screenX > canvas.width + 100 || 
+            screenY < -100 || screenY > canvas.height + 100) return;
+
+        // Icon
+        ctx.fillStyle = poi.color || "#ffcc00";
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, Math.max(7, scale * 1.4), 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 3;
+        ctx.strokeText(poi.name, screenX, screenY - 22);
+        ctx.fillText(poi.name, screenX, screenY - 22);
+    });
 }
 
 // Controls
