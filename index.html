@@ -1,200 +1,149 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>BDO Map - Fixed Center (0,0)</title>
+    <title>BDO Map - Fixed Initial View</title>
     <style>
-        body {
-            margin: 0;
-            background: #111;
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
+        body { margin:0; background:#111; overflow:hidden; height:100vh; width:100vw; }
+        canvas { display:block; image-rendering:pixelated; cursor:grab; }
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; background: rgba(0,0,0,0.9); padding: 20px 30px; border-radius: 10px;
+            z-index: 1000; font-family: Arial;
         }
-        #viewport {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            position: relative;
-            cursor: grab;
-            user-select: none;
-        }
-        #map {
-            position: absolute;
-            transform-origin: 0 0;
-            left: 0;
-            top: 0;
-        }
-        img {
-            position: absolute;
-            width: 32px;
-            height: 32px;
-            image-rendering: pixelated;
-            pointer-events: none;
+        #info {
+            position: absolute; top: 10px; left: 10px; color: white;
+            background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 4px; z-index: 100;
         }
     </style>
 </head>
 <body>
 
-<div id="viewport">
-    <div id="map"></div>
-</div>
+<canvas id="canvas"></canvas>
+<div id="loading">Loading central area...</div>
+<div id="info">Hold click to drag • Scroll to zoom</div>
 
 <script>
-const tileSize = 32;
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const loading = document.getElementById("loading");
+
+const tileSize = 16;
 const min = -50;
 const max = 30;
 
-const map = document.getElementById("map");
-const viewport = document.getElementById("viewport");
+let scale = 6.0;           // ← Much more zoomed in at start
+let offsetX = 0;
+let offsetY = 0;
 
-let scale = 1.0;
-let posX = 0;
-let posY = 0;
+const tiles = new Map();
 
-const loadedTiles = new Map();
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    offsetX = canvas.width / 2;
+    offsetY = canvas.height / 2;
+}
 
 function getTile(x, y) {
     const key = `${x},${y}`;
-    if (loadedTiles.has(key)) return loadedTiles.get(key);
+    if (tiles.has(key)) return tiles.get(key);
 
-    const img = document.createElement("img");
+    const img = new Image();
     img.src = `tiles/${x}_${y}.webp`;
-    img.style.left = (x * tileSize) + "px";
-    img.style.top = (y * tileSize) + "px";
-    img.draggable = false;
-    
-    map.appendChild(img);
-    loadedTiles.set(key, img);
+    tiles.set(key, img);
     return img;
 }
 
-// Center the map so that tile (0,0) is in the middle of the screen
-function centerOnZero() {
-    const vw = viewport.clientWidth;
-    const vh = viewport.clientHeight;
-    
-    posX = vw / 2;
-    posY = vh / 2;
-}
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-// Load tiles near center first
-function loadInitialTiles() {
-    const centerX = 0;
-    const centerY = 0;
-    
-    // Load center + nearby tiles first
-    for (let x = -8; x <= 8; x++) {
-        for (let y = -8; y <= 8; y++) {
-            if (x >= min && x <= max && y >= min && y <= max) {
-                getTile(x, y);
+    const worldLeft   = -offsetX / scale - 100;
+    const worldRight  = (canvas.width - offsetX) / scale + 100;
+    const worldTop    = -offsetY / scale - 100;
+    const worldBottom = (canvas.height - offsetY) / scale + 100;
+
+    const tMinX = Math.max(min, Math.floor(worldLeft / tileSize));
+    const tMaxX = Math.min(max, Math.ceil(worldRight / tileSize));
+    const tMinY = Math.max(min, Math.floor(worldTop / tileSize));
+    const tMaxY = Math.min(max, Math.ceil(worldBottom / tileSize));
+
+    for (let x = tMinX; x <= tMaxX; x++) {
+        for (let y = tMinY; y <= tMaxY; y++) {
+            const img = getTile(x, y);
+            if (img.complete && img.width > 0) {
+                const sx = offsetX + x * tileSize * scale;
+                const sy = offsetY + y * tileSize * scale;
+                ctx.drawImage(img, sx, sy, tileSize * scale, tileSize * scale);
             }
         }
     }
-    
-    // Then continue loading outward
-    setTimeout(() => {
-        for (let r = 9; r <= 40; r++) {
-            for (let dx = -r; dx <= r; dx++) {
-                for (let dy = -r; dy <= r; dy++) {
-                    if (Math.abs(dx) === r || Math.abs(dy) === r) {
-                        const x = centerX + dx;
-                        const y = centerY + dy;
-                        if (x >= min && x <= max && y >= min && y <= max) {
-                            getTile(x, y);
-                        }
-                    }
-                }
-            }
-        }
-    }, 300);
 }
 
-function updateVisibleTiles() {
-    const worldLeft   = -posX / scale - 150;
-    const worldRight  = (viewport.clientWidth - posX) / scale + 150;
-    const worldTop    = -posY / scale - 150;
-    const worldBottom = (viewport.clientHeight - posY) / scale + 150;
-
-    const tileMinX = Math.floor(worldLeft / tileSize);
-    const tileMaxX = Math.ceil(worldRight / tileSize);
-    const tileMinY = Math.floor(worldTop / tileSize);
-    const tileMaxY = Math.ceil(worldBottom / tileSize);
-
-    for (let x = Math.max(min, tileMinX); x <= Math.min(max, tileMaxX); x++) {
-        for (let y = Math.max(min, tileMinY); y <= Math.min(max, tileMaxY); y++) {
-            getTile(x, y);
-        }
-    }
-}
-
-function updateTransform() {
-    map.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
-    updateVisibleTiles();
-}
-
-// Initialize
-centerOnZero();
-loadInitialTiles();
-updateTransform();
-
-// Handle window resize
-window.addEventListener('resize', () => {
-    centerOnZero();
-    updateTransform();
-});
-
-// ==================== ZOOM (on mouse cursor) ====================
-viewport.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    
-    const rect = viewport.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    const worldX = (mouseX - posX) / scale;
-    const worldY = (mouseY - posY) / scale;
-
-    const delta = e.deltaY * -0.0015;
-    scale = Math.min(Math.max(0.3, scale + delta), 12);
-
-    posX = mouseX - worldX * scale;
-    posY = mouseY - worldY * scale;
-
-    updateTransform();
-});
-
-// ==================== DRAG ====================
+// Controls
 let isDragging = false;
 let lastX, lastY;
 
-viewport.addEventListener("mousedown", e => {
+canvas.addEventListener("mousedown", e => {
     if (e.button === 0) {
         isDragging = true;
         lastX = e.clientX;
         lastY = e.clientY;
-        viewport.style.cursor = "grabbing";
+        canvas.style.cursor = "grabbing";
     }
 });
 
-window.addEventListener("mouseup", () => { 
-    isDragging = false; 
-    viewport.style.cursor = "grab"; 
+window.addEventListener("mouseup", () => {
+    isDragging = false;
+    canvas.style.cursor = "grab";
 });
 
 window.addEventListener("mousemove", e => {
     if (!isDragging) return;
-    posX += e.clientX - lastX;
-    posY += e.clientY - lastY;
+    offsetX += e.clientX - lastX;
+    offsetY += e.clientY - lastY;
     lastX = e.clientX;
     lastY = e.clientY;
-    updateTransform();
+    draw();
 });
 
-// Info
-const info = document.createElement("div");
-info.style.cssText = `position:absolute;top:10px;left:10px;color:white;background:rgba(0,0,0,0.7);padding:8px 12px;border-radius:4px;font-size:14px;z-index:100;`;
-info.textContent = "Hold left click to drag • Scroll to zoom | (0,0) centered";
-document.body.appendChild(info);
+canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const wx = (mx - offsetX) / scale;
+    const wy = (my - offsetY) / scale;
+
+    scale = Math.min(Math.max(0.5, scale + e.deltaY * -0.0025), 30);
+    offsetX = mx - wx * scale;
+    offsetY = my - wy * scale;
+    draw();
+});
+
+window.addEventListener("resize", () => { resize(); draw(); });
+
+// Init
+resize();
+
+// Load small central area
+const initialRange = 5; 
+for (let x = -initialRange; x <= initialRange; x++) {
+    for (let y = -initialRange; y <= initialRange; y++) {
+        getTile(x, y);
+    }
+}
+
+// Force multiple draws so it appears immediately
+draw();
+setTimeout(draw, 100);
+setTimeout(draw, 300);
+setTimeout(draw, 600);
+
+// Hide loading
+setTimeout(() => {
+    loading.style.display = "none";
+}, 800);
 </script>
 
 </body>
